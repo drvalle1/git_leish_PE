@@ -1,0 +1,11 @@
+If we knew z1, then we can readily estimate betas and alpha
+
+If we know betas and alpha, how well can I estimate z?
+
+1) found a couple of bugs with simulated data. Let's how things go once I have fixed these bugs. 
+Problem still persists.
+
+2) perhaps we should get rid of the probit formulation with latent u's. This would simplify the model somewhat
+things still don't look great. Perhaps we have too many covariates
+
+3) Decrease the number of covariates and see how things go. Still not good. What about if I fix the last alpha (the one for IP) equal to its true value? Perhaps the problem is associated with having uncertain covariates.

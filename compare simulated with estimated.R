@@ -1,4 +1,4 @@
-rango=range(c(alpha.true,alpha.estim))
+rango=range(c(alpha.true[1:4],alpha.estim))
 plot(alpha.true,alpha.estim,xlim=rango,ylim=rango)
 lines(rango,rango,col='red')
 

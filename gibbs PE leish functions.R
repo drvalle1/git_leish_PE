@@ -52,18 +52,6 @@ print.adapt = function(accept1z,jump1z,accept.output){
   return(list(jump1=jump1,accept1=accept1))
 }
 #----------------------------------
-sample.u=function(z1,nanos,nloc,Identifiers,medias){
-  ind0=which(z1==0)
-  ind0=ind0[!(ind0%in%Identifiers[,1])] #we are not interested in u's at time 1
-  ind1=IdentifLead1(z=z1, nanos=nanos, nlocs=nloc,Identifiers=Identifiers) 
-  ind1=ind1[ind1!=0] #eliminate locations that have zeroes for all years
-  ind1=ind1[!(ind1%in%Identifiers[,1])] #we are not interested in u's at time 1
-  u=matrix(NA,nloc,nanos)
-  u[ind0]=tnorm(length(ind0),lo=-Inf,hi=0,mu=medias[ind0],sig=1)
-  u[ind1]=tnorm(length(ind1),lo=0 ,hi=Inf,mu=medias[ind1],sig=1)
-  u
-}
-#----------------------------------
 sample.z=function(nloc,nanos,ind.random,z1,OneOverDist,SomaOneOverDist,wmat,alpha,
                   xmat,betas,dat){
   z1.old=z1.new=z1
@@ -119,11 +107,12 @@ get.lprocess.prob=function(nanos,z1,nloc,media){
   lprob[!cond,1]=log(0.9)
     
   #for other time steps
+  prob=exp(media)/(1+exp(media))
   for (i in 2:nanos){
     cond1=z1[,i-1]==0 & z1[,i]==1
-    lprob[cond1,i]=pnorm(media[cond1,i],log=T)
+    lprob[cond1,i]=log(prob[cond1,i])
     cond0=z1[,i-1]==0 & z1[,i]==0
-    lprob[cond0,i]=pnorm(media[cond0,i],log=T,lower.tail=F)
+    lprob[cond0,i]=log(1-prob[cond0,i])
   }
   sum(lprob,na.rm=T)
 }
@@ -156,21 +145,24 @@ sample.betas=function(betas,jump,xmat,dat,z1){
   list(betas=betas.old,accept=betas.old!=betas)
 }
 #----------------------------------
-sample.alpha=function(u1,wmat.design,IP,nanos,invT.alpha){
-  #create design matrix
-  IP1=cbind(NA,IP[,-nanos]) #mean at year 2 uses invasion pressure for year 1
-  wmat1=cbind(1,wmat.design,as.numeric(IP1))
-  
-  #eliminate missing u1 (either at year 1 or after an invasion has already occurred)
-  ind=which(!is.na(u1))
-  wmat2=wmat1[ind,]
-  u2=u1[ind]
-  
-  #sample alpha
-  prec=t(wmat2)%*%wmat2+invT.alpha
-  var1=solve(prec)
-  pmedia=t(wmat2)%*%u2
-  t(rmvnorm(1,mean=var1%*%pmedia,sigma=var1))
+sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc){
+  alpha.old=alpha
+  for (i in 1:length(alpha)){
+    alpha.new=alpha.old
+    alpha.new[i]=rnorm(1,mean=alpha.old[i],sd=jump[i])
+    medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos,IP=IP)
+    medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos,IP=IP)
+    
+    lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old)
+    lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new)
+    
+    lprior.old=dnorm(alpha.old[i],mean=0,sd=sd.alpha[i],log=T)
+    lprior.new=dnorm(alpha.new[i],mean=0,sd=sd.alpha[i],log=T)
+    k=acceptMH(p0=lpprob.old+lprior.old,p1=lpprob.new+lprior.new,
+               x0=alpha.old[i],x1=alpha.new[i],BLOCK=F)
+    alpha.old[i]=k$x
+  }
+  list(alpha=alpha.old,accept=alpha!=alpha.old)
 }
 #----------------------------------
 get.medias=function(wmat,alpha,nloc,nanos,IP){

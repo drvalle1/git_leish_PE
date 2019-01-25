@@ -1,5 +1,4 @@
 rm(list=ls(all=TRUE))
-library('mvtnorm')
 library('Rcpp')
 set.seed(1)
 
@@ -9,7 +8,7 @@ source('gibbs PE leish functions.R')
 sourceCpp('aux_PE_leish.cpp')
 
 #get incidence
-setwd('U:\\anaia\\simulated data')
+setwd('U:\\GIT_models\\git_leish_PE\\simulated data')
 dat=data.matrix(read.csv('simulated data.csv',as.is=T))
 nloc=nrow(dat)
 nanos=ncol(dat)
@@ -28,18 +27,13 @@ SomaOneOverDist=rowSums(OneOverDist)
 setwd('U:\\anaia\\derived data\\covs')
 z=list.files()
 ind=grep('a1_',z); z1=z[ind]; z1
-ncov=length(z1)
+ncov=2#length(z1)
 wmat=list()
 for (i in 1:ncov){
   tmp=read.csv(z1[i],as.is=T)
   wmat[[i]]=data.matrix(tmp)
 }
 nparam=length(wmat)
-
-wmat.design=numeric()
-for (i in 1:nparam){
-  wmat.design=cbind(wmat.design,as.numeric(wmat[[i]]))
-}
 
 #get covariates for detection probability
 xmat=matrix(0,nloc,nanos)
@@ -50,10 +44,9 @@ xmat=cbind(1,as.numeric(xmat)) #add 1's for intercept
 #initial values for parameters
 alpha=rep(0,length(wmat)+1+1) #for intercept and for invasion pressure
 betas=rep(0,2)
-var.alpha=c(10,rep(1,length(alpha)-1))
-invT.alpha=diag(1/var.alpha)
+sd.alpha=c(sqrt(10),rep(1,length(alpha)-1))
 
-#get latent z's and u's
+#get latent z's
 z1=matrix(NA,nloc,nanos)
 for (i in 1:nloc){
   tmp=dat[i,]
@@ -65,8 +58,6 @@ for (i in 1:nloc){
   }
   z1[i,]=tmp1
 }
-u=z1
-u[z1==0]=-1
 
 #useful stuff
 Identifiers=matrix(1:(nloc*nanos),nloc,nanos)
@@ -91,8 +82,8 @@ nburn=ngibbs/2
 vec.z=matrix(NA,ngibbs,nloc*nanos)
 vec.betas=matrix(NA,ngibbs,ncol(xmat))
 vec.alpha=matrix(NA,ngibbs,length(wmat)+1+1) #intercept + invasion pressure
-jump1=list(betas=rep(1,ncol(xmat)))
-accept1=list(betas=rep(0,ncol(xmat)))
+jump1=list(betas=rep(1,ncol(xmat)),alpha=rep(1,length(alpha)))
+accept1=list(betas=rep(0,ncol(xmat)),alpha=rep(0,length(alpha)))
 accept.output=50
 for (i in 1:ngibbs){
   print(i)
@@ -107,15 +98,16 @@ for (i in 1:ngibbs){
 
   medias=get.medias(wmat=wmat,alpha=alpha,nloc=nloc,nanos=nanos,IP=IP)
 
-  u1=sample.u(z1=z1,nanos=nanos,nloc=nloc,Identifiers=Identifiers,medias=medias)
+  tmp=sample.betas(betas=betas,jump=jump1$betas,xmat=xmat,dat=dat,z1=z1)
+  accept1$betas=accept1$betas+tmp$accept
+  betas=tmp$betas
+  # betas=betas.true
   
-  # tmp=sample.betas(betas=betas,jump=jump1$betas,xmat=xmat,dat=dat,z1=z1)
-  # accept1$betas=accept1$betas+tmp$accept
-  # betas=tmp$betas
-  betas=betas.true
-  
-  # alpha=sample.alpha(u1=u1,wmat=wmat.design,IP=IP,nanos=nanos,invT.alpha=invT.alpha)
-  alpha=alpha.true
+  tmp=sample.alpha(z1=z1,IP=IP,nanos=nanos,sd.alpha=sd.alpha,alpha=alpha,jump=jump1$alpha,
+                   wmat=wmat,nloc=nloc)
+  alpha=tmp$alpha
+  accept1$alpha=accept1$alpha+tmp$accept
+  # alpha=alpha.true
   medias=get.medias(wmat=wmat,alpha=alpha,nloc=nloc,nanos=nanos,IP=IP)
   
   #adaptation MH algorithm
