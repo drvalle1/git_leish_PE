@@ -18,7 +18,7 @@ nanos=ncol(dat1)
 setwd('U:\\anaia\\derived data\\covs')
 z=list.files()
 ind=grep('a1_',z); z1=z[ind]; z1
-ncov=length(z1)
+ncov=3#length(z1)
 wmat=list()
 for (i in 1:ncov){
   tmp=read.csv(z1[i],as.is=T)
@@ -78,6 +78,7 @@ for (i in 2:nanos){
 image(z1)
 image(y.complete)
 image(y1)
+z1.true=z1
 
 #export results
 setwd('U:\\GIT_models\\git_leish_PE\\simulated data')

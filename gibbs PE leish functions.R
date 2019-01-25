@@ -52,33 +52,24 @@ print.adapt = function(accept1z,jump1z,accept.output){
   return(list(jump1=jump1,accept1=accept1))
 }
 #----------------------------------
-sample.z=function(nloc,nanos,ind.random,z1,OneOverDist,SomaOneOverDist,wmat,alpha,
-                  xmat,betas,dat){
+sample.z=function(nloc,nanos,ind.random,z1,medias,xmat,betas,dat){
   z1.old=z1.new=z1
   for (i in 1:nloc){
     z1.new=z1.old
     if (length(ind.random[[i]])!=0){ #if dat[i,] starts with 1, then ind.random[[i]]=numeric(0) and there are no random z's in that location
       #propose new set of z's for location i
       k=sample(ind.random[[i]],size=1)
-      if (k!=nanos+1) z1.new[i,k:nanos]=1
-      if (k!=1) z1.new[i,1:(k-1)]=0 #notice that if k=anos+1, then this allows for the possibility that the site was never invaded
+      if (k==0)        z1.new[i,ind.random[[i]]]=0 
+      if (k!=0)        z1.new[i,k:nanos]=1
+      if (k> 1)        z1.new[i,1:(k-1)]=0 
 
       #calculate loglikelihood
       llk.old=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.old,nloc=nloc,nanos=nanos)
       llk.new=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.new,nloc=nloc,nanos=nanos)
       
       #calculate process probability
-      IP.old=CalcInvasionPressure(z=z1.old, OneOverDist=OneOverDist, nanos=nanos, nlocs=nloc,
-                                  SomaOneOverDist=SomaOneOverDist)
-      
-      IP.new=CalcInvasionPressure(z=z1.new, OneOverDist=OneOverDist, nanos=nanos, nlocs=nloc,
-                                  SomaOneOverDist=SomaOneOverDist)
-
-      medias.old=get.medias(wmat=wmat,alpha=alpha,nloc=nloc,nanos=nanos,IP=IP.old)
-      medias.new=get.medias(wmat=wmat,alpha=alpha,nloc=nloc,nanos=nanos,IP=IP.new)
-      
-      lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1.old,nloc=nloc,media=medias.old)
-      lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1.new,nloc=nloc,media=medias.new)
+      lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1.old,nloc=nloc,media=medias)
+      lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1.new,nloc=nloc,media=medias)
       
       #calculate final probability of changing to new state
       lp.old=lpprob.old+llk.old
@@ -145,13 +136,13 @@ sample.betas=function(betas,jump,xmat,dat,z1){
   list(betas=betas.old,accept=betas.old!=betas)
 }
 #----------------------------------
-sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc){
+sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc,nparam){
   alpha.old=alpha
   for (i in 1:length(alpha)){
     alpha.new=alpha.old
     alpha.new[i]=rnorm(1,mean=alpha.old[i],sd=jump[i])
-    medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos,IP=IP)
-    medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos,IP=IP)
+    medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos,nparam=nparam)
+    medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos,nparam=nparam)
     
     lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old)
     lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new)
@@ -165,10 +156,10 @@ sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc){
   list(alpha=alpha.old,accept=alpha!=alpha.old)
 }
 #----------------------------------
-get.medias=function(wmat,alpha,nloc,nanos,IP){
+get.medias=function(wmat,alpha,nloc,nanos,nparam){
   medias=matrix(alpha[1],nloc,nanos)
-  for (i in 1:length(wmat)){
+  for (i in 1:nparam){
     medias=medias+wmat[[i]]*alpha[i+1]
   }
-  medias+alpha[length(alpha)]*cbind(NA,IP[,-nanos]) #mean for 2nd year depends on IP from year 1
+  medias
 }
