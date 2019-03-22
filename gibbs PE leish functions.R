@@ -52,7 +52,7 @@ print.adapt = function(accept1z,jump1z,accept.output){
   return(list(jump1=jump1,accept1=accept1))
 }
 #----------------------------------
-sample.z=function(nloc,nanos,ind.random,z1,medias,xmat,betas,dat){
+sample.z=function(nloc,nanos,ind.random,z1,medias,xmat,betas,dat,gamma){
   z1.old=z1.new=z1
   for (i in 1:nloc){
     z1.new=z1.old
@@ -68,8 +68,8 @@ sample.z=function(nloc,nanos,ind.random,z1,medias,xmat,betas,dat){
       llk.new=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.new,nloc=nloc,nanos=nanos)
       
       #calculate process probability
-      lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1.old,nloc=nloc,media=medias)
-      lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1.new,nloc=nloc,media=medias)
+      lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1.old,nloc=nloc,media=medias,gamma=gamma)
+      lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1.new,nloc=nloc,media=medias,gamma=gamma)
       
       #calculate final probability of changing to new state
       lp.old=lpprob.old+llk.old
@@ -89,13 +89,13 @@ sample.z=function(nloc,nanos,ind.random,z1,medias,xmat,betas,dat){
   z1.old
 }
 #----------------------------------
-get.lprocess.prob=function(nanos,z1,nloc,media){
+get.lprocess.prob=function(nanos,z1,nloc,media,gamma){
   lprob=matrix(NA,nloc,nanos)
   
   #for first time step
   cond=z1[,1]==1
-  lprob[cond,1]=log(0.1)
-  lprob[!cond,1]=log(0.9)
+  lprob[cond,1]=log(gamma)
+  lprob[!cond,1]=log(1-gamma)
     
   #for other time steps
   prob=exp(media)/(1+exp(media))
@@ -136,16 +136,18 @@ sample.betas=function(betas,jump,xmat,dat,z1){
   list(betas=betas.old,accept=betas.old!=betas)
 }
 #----------------------------------
-sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc,nparam){
+sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc,nparam,gamma,psi){
   alpha.old=alpha
   for (i in 1:length(alpha)){
     alpha.new=alpha.old
     alpha.new[i]=rnorm(1,mean=alpha.old[i],sd=jump[i])
-    medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos,nparam=nparam)
-    medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos,nparam=nparam)
+    medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos,nparam=nparam,
+                          psi=psi,IP=IP)
+    medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos,nparam=nparam,
+                          psi=psi,IP=IP)
     
-    lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old)
-    lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new)
+    lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old,gamma=gamma)
+    lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new,gamma=gamma)
     
     lprior.old=dnorm(alpha.old[i],mean=0,sd=sd.alpha[i],log=T)
     lprior.new=dnorm(alpha.new[i],mean=0,sd=sd.alpha[i],log=T)
@@ -156,10 +158,31 @@ sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc,nparam){
   list(alpha=alpha.old,accept=alpha!=alpha.old)
 }
 #----------------------------------
-get.medias=function(wmat,alpha,nloc,nanos,nparam){
-  medias=matrix(alpha[1],nloc,nanos)
-  for (i in 1:nparam){
-    medias=medias+wmat[[i]]*alpha[i+1]
-  }
-  medias
+get.medias=function(wmat,alpha,nloc,nanos,nparam,psi,IP){
+  matrix(wmat%*%alpha,nloc,nanos)+psi*IP
+}
+#----------------------------------
+sample.gamma=function(z1,nloc){
+  soma=sum(z1[,1])
+  a1=soma+1
+  b1=nloc-soma+1
+  rbeta(1,a1,b1)
+}
+#----------------------------------
+sample.psi=function(z1,IP,nanos,alpha,jump,wmat,nloc,nparam,gamma,psi,sd.psi){
+  psi.old=psi
+  psi.new=rnorm(1,mean=psi.old,sd=jump)
+  medias.old=get.medias(wmat=wmat,alpha=alpha,nloc=nloc,nanos=nanos,nparam=nparam,
+                          psi=psi.old,IP=IP)
+  medias.new=get.medias(wmat=wmat,alpha=alpha,nloc=nloc,nanos=nanos,nparam=nparam,
+                          psi=psi.new,IP=IP)
+    
+  lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old,gamma=gamma)
+  lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new,gamma=gamma)
+    
+  lprior.old=dnorm(psi.old,mean=0,sd=sd.psi,log=T)
+  lprior.new=dnorm(psi.new,mean=0,sd=sd.psi,log=T)
+  k=acceptMH(p0=lpprob.old+lprior.old,p1=lpprob.new+lprior.new,
+             x0=psi.old,x1=psi.new,BLOCK=F)
+  list(psi=k$x,accept=k$x!=psi.old)
 }
