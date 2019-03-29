@@ -68,7 +68,7 @@ gibbs.leish=function(wmat,xmat,dat.complete,dat,ngibbs,nburn,IP,sd.alpha,sd.psi)
     }
   
     #store results
-    vec.z[i,]=z
+    vec.z[i,]=z1
     vec.betas[i,]=betas
     vec.alpha[i,]=alpha
     vec.gamma[i]=gamma
