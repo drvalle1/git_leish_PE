@@ -52,38 +52,39 @@ print.adapt = function(accept1z,jump1z,accept.output){
   return(list(jump1=jump1,accept1=accept1))
 }
 #----------------------------------
-sample.z=function(nloc,nanos,ind.random.loc,ind.random.zeroes,z1,medias,xmat,betas,dat,gamma){
+sample.z=function(nloc,nanos,ind.random,z1,medias,xmat,betas,dat,gamma){
   z1.old=z1.new=z1
-  for (i in ind.random.loc){ #if dat[i,1]=1 then don't do anything as there are no random z's in that location
+  for (i in 1:nloc){
     z1.new=z1.old
-    #propose new set of z's for location i
-    tmp=ind.random.zeroes[[i]]
-    k=sample(tmp,size=1)
-    if (k==0)        z1.new[i,tmp[-1]]=0 #everything is zero
-    if (k!=0)        z1.new[i,k:nanos]=1
-    if (k> 1)        z1.new[i,1:(k-1)]=0 
+    if (length(ind.random[[i]])!=0){ #if dat[i,] starts with 1, then ind.random[[i]]=numeric(0) and there are no random z's in that location
+      #propose new set of z's for location i
+      k=sample(ind.random[[i]],size=1)
+      if (k==0)        z1.new[i,ind.random[[i]]]=0 
+      if (k!=0)        z1.new[i,k:nanos]=1
+      if (k> 1)        z1.new[i,1:(k-1)]=0 
 
-    #calculate loglikelihood
-    llk.old=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.old,nloc=nloc,nanos=nanos)
-    llk.new=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.new,nloc=nloc,nanos=nanos)
+      #calculate loglikelihood
+      llk.old=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.old,nloc=nloc,nanos=nanos)
+      llk.new=get.llk(xmat=xmat,betas=betas,dat=dat,z1=z1.new,nloc=nloc,nanos=nanos)
       
-    #calculate process probability
-    lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1.old,nloc=nloc,media=medias,gamma=gamma)
-    lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1.new,nloc=nloc,media=medias,gamma=gamma)
+      #calculate process probability
+      lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1.old,nloc=nloc,media=medias,gamma=gamma)
+      lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1.new,nloc=nloc,media=medias,gamma=gamma)
       
-    #calculate final probability of changing to new state
-    lp.old=lpprob.old+llk.old
-    lp.new=lpprob.new+llk.new
-    max1=max(c(lp.old,lp.new))
-    lp.old1=lp.old-max1
-    lp.new1=lp.new-max1
-    p.old=exp(lp.old1)
-    p.new=exp(lp.new1)
-    prob=p.new/(p.old+p.new)
+      #calculate final probability of changing to new state
+      lp.old=lpprob.old+llk.old
+      lp.new=lpprob.new+llk.new
+      max1=max(c(lp.old,lp.new))
+      lp.old1=lp.old-max1
+      lp.new1=lp.new-max1
+      p.old=exp(lp.old1)
+      p.new=exp(lp.new1)
+      prob=p.new/(p.old+p.new)
       
-    #accept or reject move
-    k1=rbinom(1,size=1,prob=prob)
-    if (k1==1) z1.old[i,]=z1.new[i,]
+      #accept or reject move
+      k1=rbinom(1,size=1,prob=prob)
+      if (k1==1) z1.old[i,]=z1.new[i,]
+    }
   }
   z1.old
 }
@@ -135,25 +136,21 @@ sample.betas=function(betas,jump,xmat,dat,z1){
   list(betas=betas.old,accept=betas.old!=betas)
 }
 #----------------------------------
-sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc,nparam,gamma){
+sample.alpha=function(z1,IP,nanos,sd.alpha,alpha,jump,wmat,nloc,nparam,gamma,cov1){
   alpha.old=alpha
-  for (i in 1:length(alpha)){
-    alpha.new=alpha.old
-    alpha.new[i]=rnorm(1,mean=alpha.old[i],sd=jump[i])
+  alpha.new=t(rmvnorm(1,mean=alpha.old,sigma=cov1*jump))
+
+  medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos)
+  medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos)
     
-    medias.old=get.medias(wmat=wmat,alpha=alpha.old,nloc=nloc,nanos=nanos)
-    medias.new=get.medias(wmat=wmat,alpha=alpha.new,nloc=nloc,nanos=nanos)
-    lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old,gamma=gamma)
-    lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new,gamma=gamma)
+  lpprob.old=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.old,gamma=gamma)
+  lpprob.new=get.lprocess.prob(nanos=nanos,z1=z1,nloc=nloc,media=medias.new,gamma=gamma)
     
-    lprior.old=dnorm(alpha.old[i],mean=0,sd=sd.alpha[i],log=T)
-    lprior.new=dnorm(alpha.new[i],mean=0,sd=sd.alpha[i],log=T)
-    
-    k=acceptMH(p0=lpprob.old+lprior.old,p1=lpprob.new+lprior.new,
-               x0=alpha.old[i],x1=alpha.new[i],BLOCK=F)
-    alpha.old[i]=k$x
-  }
-  list(alpha=alpha.old,accept=alpha!=alpha.old)
+  lprior.old=sum(dnorm(alpha.old,mean=0,sd=sd.alpha,log=T))
+  lprior.new=sum(dnorm(alpha.new,mean=0,sd=sd.alpha,log=T))
+  k=acceptMH(p0=lpprob.old+lprior.old,p1=lpprob.new+lprior.new,
+             x0=alpha.old,x1=alpha.new,BLOCK=T)
+  list(alpha=k$x,accept=alpha[1]!=k$x[1])
 }
 #----------------------------------
 get.medias=function(wmat,alpha,nloc,nanos){
