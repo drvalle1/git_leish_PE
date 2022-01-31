@@ -29,22 +29,28 @@ image(dat.complete)
 setwd('U:\\anaia\\derived data\\covs')
 tmp=read.csv('covs combo standard.csv',as.is=T)
 sum(rep(floor(dat0[,'X']/10),times=11)!=tmp$ID.IBGE) #basic checking
-covs.invasion=c('Indice.Saneamento','Indice.Inst.Sanita','Cultivos.total','Formação.florestal')
+covs.invasion=c('Indice.Saneamento','Indice.Inst.Sanita',
+                'Cultivos.total','Formação.florestal')
 wmat=data.matrix(cbind(1,tmp[,covs.invasion]))
+covs.detect=c('assessoramento','capacitacao','dist_sede')
+# covs.detect='dist_sede'
+xmat=data.matrix(cbind(1,tmp[,covs.detect]))
 
 #useful stuff
 Identifiers=matrix(1:(nloc*nanos),nloc,nanos)
 
-#get covariates for detection probability
-assesso=tmp[,'assessoramento']
-capacit=tmp[,'capacitacao']
-xmat=cbind(1,assesso,capacit) #add 1's for intercept
-
 #prior for alphas
-sd.alpha=c(sqrt(10),rep(sqrt(10),length(wmat)))
+sd.alpha=rep(sqrt(10),ncol(wmat))
+sd.betas=rep(sqrt(10),ncol(xmat))
 
 ngibbs=1000
 nburn=ngibbs/2
 res=gibbs.leish(wmat=wmat,xmat=xmat,dat.complete=dat.complete,
                 dat=dat,ngibbs=ngibbs,nburn=nburn,
-                sd.alpha=sd.alpha)
+                sd.alpha=sd.alpha,sd.betas=sd.betas)
+
+#export results
+setwd('U:\\GIT_models\\git_leish_PE\\results')
+write.csv(res$betas,'betas.csv',row.names=F)
+write.csv(res$alpha,'alpha.csv',row.names=F)
+write.csv(res$gamma1,'gamma1.csv',row.names=F)
