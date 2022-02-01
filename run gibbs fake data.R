@@ -1,13 +1,10 @@
 rm(list=ls(all=TRUE))
-library('Rcpp')
-library('mvtnorm')
 set.seed(4)
 
 #read relevant functions
 setwd('U:\\GIT_models\\git_leish_PE')
 source('gibbs PE leish functions.R')
 source('gibbs PE leish.R')
-sourceCpp('aux_PE_leish.cpp')
 
 #get incidence
 setwd('U:\\GIT_models\\git_leish_PE\\simulated data')
